@@ -1,0 +1,167 @@
+<?php
+
+
+use Drupal\commerce_shipping\Plugin\Field\FieldWidget\ShippingRateWidget;
+use Drupal\Core\Ajax\ReplaceCommand;
+use Drupal\Core\Form\FormStateInterface;
+
+
+function commerce_bpost_commerce_checkout_pane_shipping_information_form_alter(array &$pane_form, FormStateInterface $form_state, &$complete_form) {
+  // Move shipment selection before shipping profile, since shipping profile
+  // is not always required for bpost.
+  $pane_form["shipments"]['#weight'] = -10;
+  $checkout_flow = $form_state->getFormObject();
+
+  if (isset($pane_form["recalculate_shipping"])) {
+    $pane_form["recalculate_shipping"]['#access'] = FALSE;
+  }
+
+  $complete_form['#validate'][] = 'commerce_bpost_shipping_information_validate';
+  $complete_form["actions"]["next"]["#submit"][] = 'commerce_bpost_shipping_information_submit';
+
+  $order = $checkout_flow->getOrder();
+  $shipments = $order->get('shipments')->referencedEntities();
+  foreach ($shipments as $shipment_index => $shipment) {
+    $shipping_method = $shipment->getShippingMethod();
+    $pane_form["shipments"][$shipment_index]["shipping_method"]["widget"][0]["#ajax"]["callback"] = '_commerce_bpost_shipping_rate_ajax_refresh';
+    $id = 'bpost' . $shipment_index;
+    $pane_form["shipments"][$shipment_index]["shipping_method"]["widget"][0]["#ajax"]["wrapper"] = $id;
+
+    $pane_form["shipments"][$shipment_index]['bpost_settings'] = [
+      '#type' => 'container',
+      '#id' => $id,
+      '#tree' => TRUE,
+    ];
+    if ($shipping_method->getPlugin()->getPluginId() == 'bpost') {
+
+      $services = $shipping_method->getPlugin()->getServices();
+      $options = [];
+      foreach ($services as $service) {
+        $options[$service->getId()] = $service->getLabel();
+      }
+
+      if (!$options) {
+        return $pane_form;
+      }
+
+      if (count($options) === 1) {
+        $selected_service = $service->getId();
+        $pane_form["shipments"][$shipment_index]['bpost_settings']['bpost_services'] = [
+          '#type' => 'value',
+          '#value' => $selected_service,
+        ];
+
+        $form_state->setValue([
+          'shipping_information',
+          'shipments',
+          $shipment_index,
+          'bpost_settings',
+          'bpost_services',
+        ], $selected_service);
+      }
+      else {
+
+        $selected_service = $form_state->getValue([
+          'shipping_information',
+          'shipments',
+          $shipment_index,
+          'bpost_settings',
+          'bpost_services',
+        ]);
+        if (!$selected_service) {
+          $selected_service = array_key_first($options);
+        }
+        $pane_form["shipments"][$shipment_index]['bpost_settings']['bpost_services'] = [
+          '#title' => t('Please select your delivery choice'),
+          '#type' => 'select',
+          '#options' => $options,
+          '#default_value' => $selected_service,
+          '#ajax' => [
+            'callback' => [
+              get_class($form_state->getFormObject()),
+              'ajaxRefreshForm',
+            ],
+            'element' => $pane_form['#parents'],
+          ],
+          '#required' => TRUE,
+//          '#limit_validation_errors' => [
+//            array_merge($pane_form['#parents'], ['shipments']),
+//          ],
+        ];
+      }
+
+      $service_plugin = $shipping_method->getPlugin()
+        ->instantiateServicePlugin($selected_service);
+      $pane_context = [
+        'order' => $order,
+      ];
+
+      $form_state->set('bpost_service_checkout_pane_context', $pane_context);
+      // Keep track of the selected service because on the service form there can
+      // be other Ajax based elements which would remove the selection.
+      $form_state->set('bpost_service', $service);
+      $pane_form = $service_plugin->buildCheckoutPaneForm($pane_form, $form_state, $complete_form);
+    }
+    else {
+      // Restore shipping profile access possible removed by pickup point.
+      unset($pane_form["shipping_profile"]['#access']);
+    }
+  }
+}
+
+
+function commerce_bpost_shipping_information_validate(array &$form, FormStateInterface $form_state) {
+  $trigger = $form_state->getTriggeringElement();
+  if (isset($trigger["#executes_submit_callback"]) && $trigger["#executes_submit_callback"]) {
+
+    $order = $form_state->getFormObject()->getOrder();
+    $shipments = $order->get('shipments')->referencedEntities();
+    foreach ($shipments as $shipment_index => $shipment) {
+      $shipping_method = $shipment->getShippingMethod();
+      if ($shipping_method->getPlugin()->getPluginId() == 'bpost') {
+        $selected_service = $form_state->getValue([
+          'shipping_information',
+          'shipments',
+          $shipment_index,
+          'bpost_settings',
+          'bpost_services',
+        ]);
+        $service_plugin = $shipping_method->getPlugin()
+          ->instantiateServicePlugin($selected_service);
+        $service_plugin->validateCheckoutPaneForm($form['shipping_information'], $form_state, $form);
+      }
+    }
+  }
+
+}
+function commerce_bpost_shipping_information_submit(array &$form, FormStateInterface $form_state) {
+
+  $trigger = $form_state->getTriggeringElement();
+  if (isset($trigger["#executes_submit_callback"]) && $trigger["#executes_submit_callback"]) {
+
+    $order = $form_state->getFormObject()->getOrder();
+    $shipments = $order->get('shipments')->referencedEntities();
+    foreach ($shipments as $shipment_index => $shipment) {
+      $shipping_method = $shipment->getShippingMethod();
+      if ($shipping_method->getPlugin()->getPluginId() == 'bpost') {
+        $selected_service = $form_state->getValue([
+          'shipping_information',
+          'shipments',
+          $shipment_index,
+          'bpost_settings',
+          'bpost_services',
+        ]);
+        $service_plugin = $shipping_method->getPlugin()
+          ->instantiateServicePlugin($selected_service);
+        $service_plugin->submitCheckoutPaneForm($form['shipping_information'], $form_state, $form);
+      }
+    }
+  }
+
+}
+
+function _commerce_bpost_shipping_rate_ajax_refresh(array &$form, FormStateInterface $form_state) {
+  $response = ShippingRateWidget::ajaxRefresh($form, $form_state);
+  $response->addCommand(new ReplaceCommand('[data-drupal-selector="edit-shipping-information"]', $form["shipping_information"]));
+  return $response;
+}

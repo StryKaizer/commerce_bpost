@@ -208,9 +208,12 @@ class BpostShipping extends ShippingInformation implements ContainerFactoryPlugi
    * @return string|null
    *   The shipping service.
    */
-  protected function getSelectedShippingService(FormStateInterface $form_state) {
+  public static function getSelectedShippingService(FormStateInterface $form_state, $order) {
     $selected_service = $form_state->getValue([
-      'bpost_shipping',
+      'shipping_information',
+      'shipments',
+      0,
+      'bpost_settings',
       'bpost_services',
     ]);
     if ($selected_service) {
@@ -224,7 +227,7 @@ class BpostShipping extends ShippingInformation implements ContainerFactoryPlugi
       return $selected_service;
     }
 
-    $existing_shipments = $this->order->shipments->referencedEntities();
+    $existing_shipments = $order->shipments->referencedEntities();
     if (!$existing_shipments) {
       return NULL;
     }

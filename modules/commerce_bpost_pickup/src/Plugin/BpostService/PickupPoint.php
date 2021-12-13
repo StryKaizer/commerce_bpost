@@ -265,6 +265,7 @@ class PickupPoint extends BpostServicePluginBase implements ContainerFactoryPlug
     $context = $form_state->get('bpost_service_checkout_pane_context');
     /** @var \Drupal\commerce_order\Entity\OrderInterface $order */
     $order = $context['order'];
+    $pane_form["shipping_profile"]['#access'] = FALSE;
 
     if ($form_state->get('shipping_profile')) {
       /** @var \Drupal\profile\Entity\ProfileInterface $shipping_profile */
@@ -296,10 +297,7 @@ class PickupPoint extends BpostServicePluginBase implements ContainerFactoryPlug
       '#value' => $this->t('Search'),
       '#executes_submit_callback' => FALSE,
       '#limit_validation_errors' => [
-        array_merge($pane_form['#parents'], [
-          'search_wrapper',
-          'postal_code',
-        ]),
+        $pane_form['#parents']
       ],
       '#ajax' => [
         'callback' => [get_class($this), 'ajaxRefreshForm'],
@@ -583,7 +581,7 @@ class PickupPoint extends BpostServicePluginBase implements ContainerFactoryPlug
    *   The submitted point.
    */
   protected function getSubmittedPoint(FormStateInterface $form_state) {
-    $values = $form_state->getValue(['bpost_shipping', 'list_wrapper', 'radios']);
+    $values = $form_state->getValue(['shipping_information', 'list_wrapper', 'radios']);
     if (!$values) {
       return NULL;
     }
@@ -648,7 +646,7 @@ class PickupPoint extends BpostServicePluginBase implements ContainerFactoryPlug
 
     $complete_form = $form_state->getCompleteForm();
     $radios = NestedArray::getValue($complete_form, [
-      'bpost_shipping',
+      'shipping_information',
       'list_wrapper',
       'radios',
     ]);
@@ -683,7 +681,7 @@ class PickupPoint extends BpostServicePluginBase implements ContainerFactoryPlug
    */
   protected function getSelectedPostalCode(OrderInterface $order, FormStateInterface $form_state) {
     $postal_code = $form_state->getValue([
-      'bpost_shipping',
+      'shipping_information',
       'search_wrapper',
       'postal_code',
     ]);
