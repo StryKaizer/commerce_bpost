@@ -5,8 +5,13 @@ use Drupal\commerce_shipping\Plugin\Field\FieldWidget\ShippingRateWidget;
 use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\Core\Form\FormStateInterface;
 
+function commerce_bpost_commerce_checkout_pane_form_alter(array &$pane_form, FormStateInterface $form_state, &$complete_form) {
 
-function commerce_bpost_commerce_checkout_pane_shipping_information_form_alter(array &$pane_form, FormStateInterface $form_state, &$complete_form) {
+  // We only want to alter shipping_information pane.
+  if ($pane_form["#pane_id"] !== 'shipping_information') {
+    return;
+  }
+
   // Move shipment selection before shipping profile, since shipping profile
   // is not always required for bpost.
   $pane_form["shipments"]['#weight'] = -10;
@@ -84,9 +89,7 @@ function commerce_bpost_commerce_checkout_pane_shipping_information_form_alter(a
             'element' => $pane_form['#parents'],
           ],
           '#required' => TRUE,
-//          '#limit_validation_errors' => [
-//            array_merge($pane_form['#parents'], ['shipments']),
-//          ],
+          '#limit_validation_errors' => [$pane_form['#parents']],
         ];
       }
 
@@ -132,8 +135,8 @@ function commerce_bpost_shipping_information_validate(array &$form, FormStateInt
       }
     }
   }
-
 }
+
 function commerce_bpost_shipping_information_submit(array &$form, FormStateInterface $form_state) {
 
   $trigger = $form_state->getTriggeringElement();
@@ -157,7 +160,6 @@ function commerce_bpost_shipping_information_submit(array &$form, FormStateInter
       }
     }
   }
-
 }
 
 function _commerce_bpost_shipping_rate_ajax_refresh(array &$form, FormStateInterface $form_state) {

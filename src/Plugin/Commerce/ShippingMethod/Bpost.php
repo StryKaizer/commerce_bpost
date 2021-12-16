@@ -272,16 +272,16 @@ class Bpost extends ShippingMethodBase {
    * {@inheritdoc}
    */
   public function calculateRates(ShipmentInterface $shipment) {
-    $rates = [];
-    if (!$shipment->getShippingService()) {
-      return $rates;
-    }
+//    $rates = [];
+//    if (!$shipment->getShippingService()) {
+//      return $rates;
+//    }
 
     $selected_service = $shipment->getShippingService();
     // If the selected service is not one of bPost, calculate the default price.
     if(!in_array($selected_service, array_keys($this->configuration["service_configuration"]))) {
       // TODO: make the default configurable, using first available service now.
-      $selected_service = array_key_first($this->configuration["service_configuration"]);
+      $selected_service = $this->configuration["services"][0];
     }
 
     /** @var \Drupal\commerce_bpost\BpostServiceInterface $plugin */
